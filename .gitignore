@@ -1,1 +1,5 @@
 env/*
+.idea/*
+*_bp.pkl
+*_enc.pkl
+test_sequences/*
