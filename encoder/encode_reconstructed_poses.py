@@ -9,9 +9,9 @@ from scipy.spatial.transform import Rotation as R
 from encoder.pose_encoder_10D_torch import PoseEncoder10D
 
 
-def encode_sequence(dir, sequence, pose_encoder):
+def encode_sequence(directory, sequence, pose_encoder):
     regex_pkl = ('[0-9]' * 4) + "_bp.pkl"
-    regex_pkl_filenames = glob.glob(os.path.join(dir, sequence, regex_pkl))
+    regex_pkl_filenames = glob.glob(os.path.join(directory, sequence, regex_pkl))
     regex_pkl_filenames.sort()
     body_poses_as_matrix_smooth = None
 
@@ -32,23 +32,23 @@ def encode_sequence(dir, sequence, pose_encoder):
         torch.save(body_poses_encoded, output_filename)
 
 
-def encode_sequences(dir, sequences):
+def encode_sequences(directory, sequences):
     pose_encoder_path = "../pose_encoder_10D_converted.pth"
     pose_encoder = PoseEncoder10D()
     pose_encoder.load_state_dict(torch.load(pose_encoder_path))
 
     for sequence in sequences:
-        encode_sequence(dir, sequence, pose_encoder)
+        encode_sequence(directory, sequence, pose_encoder)
 
 
 def main_example():
-    dir = "../data/train_sequence/poses/"
+    directory = "../data/train_sequence/poses/"
     sequences = ["dan-005"]
-    encode_sequences(dir, sequences)
+    encode_sequences(directory, sequences)
 
-    dir = "../data/validation_sequence/poses/"
+    directory = "../data/validation_sequence/poses/"
     sequences = ["dan-013"]
-    encode_sequences(dir, sequences)
+    encode_sequences(directory, sequences)
 
 
 if __name__ == "__main__":

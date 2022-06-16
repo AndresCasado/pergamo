@@ -22,10 +22,10 @@ def separate_arms(body_poses_as_matrix, angle=20, left_arm=16, right_arm=15):
     return poses
 
 
-def process_sequence(dir, motion_path, betas, smpl_model):
+def process_sequence(directory, motion_path, betas, smpl_model):
     sequence = motion_path.split(".")[0]
 
-    motion = np.load(os.path.join(dir, motion_path), mmap_mode='r')
+    motion = np.load(os.path.join(directory, motion_path), mmap_mode='r')
     global_orient = motion["poses"][:, 0:3]
     motion_posses = motion["poses"][:, 3:72]
 
@@ -43,28 +43,26 @@ def process_sequence(dir, motion_path, betas, smpl_model):
                             trans=torch.from_numpy(motion["trans"]),
                             body_pose=matrix_pose)
 
-        index = "{:04}".format(i)
-
-        output_dir = os.path.join(dir, sequence)
+        output_dir = os.path.join(directory, sequence)
         os.makedirs(output_dir, exist_ok=True)
-        pkl.dump(pose, open(os.path.join(output_dir, index + "_bp.pkl"), "wb"))
-        pkl.dump(fmodel, open(os.path.join(output_dir, index + ".pkl"), "wb"))
+        pkl.dump(pose, open(os.path.join(output_dir, f"{i:04}_bp.pkl"), "wb"))
+        pkl.dump(fmodel, open(os.path.join(output_dir, f"{i:04}.pkl"), "wb"))
 
 
-def process_sequences(dir, motion_paths):
+def process_sequences(directory, motion_paths):
     smpl_model_path = '../data/smpl/smpl_neutral.pkl'
     smpl_model = smplx.build_layer(smpl_model_path)
 
     betas = torch.from_numpy(pkl.load(open("../data/mean_betas.pkl", "rb"))).unsqueeze(0)
 
     for motion_path in motion_paths:
-        process_sequence(dir, motion_path, betas, smpl_model)
+        process_sequence(directory, motion_path, betas, smpl_model)
 
 
 def main_example():
-    dir = "../data/test_sequence/"
-    motion_paths = [f"Subject_6_F_7_poses.npz"]
-    process_sequences(dir, motion_paths)
+    directory = "../data/test_sequence/"
+    motion_paths = ["Subject_6_F_7_poses.npz"]
+    process_sequences(directory, motion_paths)
 
 
 if __name__ == "__main__":
