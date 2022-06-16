@@ -1,15 +1,7 @@
-import os
 import typing
 
-import igl
-import numpy as np
 import torch
 from matplotlib import pyplot as plt
-
-
-def scatter_labeled(labeled_points: typing.List[typing.Tuple[str, torch.Tensor]], same_size=True, ):
-    labels, points = zip(*labeled_points)
-    plot_3d_points(*points, labels=labels, same_size=same_size)
 
 
 def plot_3d_points(points: torch.Tensor, *additional, labels: typing.List[str] = None, same_size=True):
@@ -54,44 +46,6 @@ def plot_3d_points(points: torch.Tensor, *additional, labels: typing.List[str] =
     plt.show()
 
 
-def push_vertices(
-        vs: torch.Tensor,
-        base_vs: torch.Tensor,
-        base_fs: torch.Tensor,
-        epsilon: float,
-):
-    vs_np = vs
-    base_vs_np = base_vs
-    base_fs_np = base_fs
-
-    s, i, c, n = igl.signed_distance(
-        p=vs_np,
-        v=base_vs_np,
-        f=base_fs_np,
-        return_normals=True,
-    )
-    d = (s - epsilon).clip(max=0.0)
-    dn = np.einsum('n,nd->nd', d, n)
-    moved = vs - dn
-
-    return moved
-
-
-def save_kaolin_mesh(
-        path: typing.Union[str, bytes, os.PathLike],
-        verts: torch.Tensor,
-        faces: torch.Tensor,
-        # normals: torch.Tensor,
-):
-    # TODO Save mesh normals or materials
-    # It will be useful to use vn.unique(return_inverse=True), but rembember
-    # that return_inverse is very inefficient
-    lines = []
-    for v in verts:
-        x, y, z = v
-        lines.append(f'v {x} {y} {z}\n')
-    for f in faces + 1:
-        x, y, z = f
-        lines.append(f'f {x} {y} {z}\n')
-    with open(path, 'w') as file:
-        file.writelines(lines)
+def scatter_labeled(labeled_points: typing.List[typing.Tuple[str, torch.Tensor]], same_size=True, ):
+    labels, points = zip(*labeled_points)
+    plot_3d_points(*points, labels=labels, same_size=same_size)

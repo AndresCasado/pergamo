@@ -8,10 +8,10 @@ import torch
 import trimesh
 from tqdm import tqdm
 
-from tools.colision_tools import push_vertices
-from tools.posing_tools import load_poser
-from tools.animation_storage_tools import save_pc2
 from regressor import Regressor
+from tools.animation_storage_tools import save_pc2
+from tools.collision_tools import push_vertices
+from tools.posing_tools import load_poser
 
 
 def predict_reconstructed_sequence(

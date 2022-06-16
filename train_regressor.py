@@ -12,9 +12,9 @@ import trimesh
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
+from regressor import Regressor
 from tools.normal_tools import compute_normals_per_vertex
 from tools.prediction_tools import predict_sequence
-from regressor import Regressor
 
 os.makedirs('runs/', exist_ok=True)
 # writer = SummaryWriter(log_dir="runs/")

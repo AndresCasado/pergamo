@@ -1,7 +1,9 @@
 import os
 import struct
+import typing
 
 import numpy as np
+import torch
 
 
 def save_pc2(filename, data):
@@ -30,3 +32,23 @@ def save_pc2(filename, data):
                 f.write(vert)
 
     print('Saved:', filename)
+
+
+def save_kaolin_mesh(
+        path: typing.Union[str, bytes, os.PathLike],
+        verts: torch.Tensor,
+        faces: torch.Tensor,
+        # normals: torch.Tensor,
+):
+    # TODO Save mesh normals or materials
+    # It will be useful to use vn.unique(return_inverse=True), but rembember
+    # that return_inverse is very inefficient
+    lines = []
+    for v in verts:
+        x, y, z = v
+        lines.append(f'v {x} {y} {z}\n')
+    for f in faces + 1:
+        x, y, z = f
+        lines.append(f'f {x} {y} {z}\n')
+    with open(path, 'w') as file:
+        file.writelines(lines)
