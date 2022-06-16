@@ -4,6 +4,7 @@ import pickle as pkl
 
 import numpy as np
 import torch
+import tqdm
 from scipy.spatial.transform import Rotation as R
 
 from encoder.pose_encoder_10D_torch import PoseEncoder10D
@@ -15,7 +16,8 @@ def encode_sequence(directory, sequence, pose_encoder):
     regex_pkl_filenames.sort()
     body_poses_as_matrix_smooth = None
 
-    for filename in regex_pkl_filenames:
+    iterator = tqdm.tqdm(regex_pkl_filenames, desc="Encoding poses")
+    for filename in iterator:
         body_poses_as_matrix = pkl.load(open(filename, "rb"))
 
         # This reproduces the smoothing performed during reconstruction

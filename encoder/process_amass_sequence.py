@@ -4,6 +4,7 @@ import pickle as pkl
 import numpy as np
 import smplx
 import torch
+import tqdm
 from scipy.spatial.transform import Rotation as R
 
 
@@ -27,16 +28,21 @@ def process_sequence(directory, motion_path, betas, smpl_model):
 
     motion = np.load(os.path.join(directory, motion_path), mmap_mode='r')
     global_orient = motion["poses"][:, 0:3]
-    motion_posses = motion["poses"][:, 3:72]
+    motion_poses = motion["poses"][:, 3:72]
 
-    for i, (pose, orient) in enumerate(zip(motion_posses, global_orient)):
+    iterator = tqdm.tqdm(
+        iterable=enumerate(zip(motion_poses, global_orient)),
+        desc="Processing poses",
+        total=len(motion_poses),
+    )
+    for i, (pose, orient) in iterator:
         matrix_pose = np.expand_dims(R.from_rotvec(pose.reshape(23, 3)).as_matrix(), axis=0)
         matrix_pose = separate_arms(matrix_pose)
 
         pose = R.from_matrix(matrix_pose.squeeze()).as_rotvec()
         orient = torch.from_numpy(R.from_rotvec(orient).as_matrix()).unsqueeze(0).float()
 
-        matrix_pose = torch.from_numpy(matrix_pose).unsqueeze(0).float()
+        matrix_pose = torch.from_numpy(matrix_pose).float()
 
         fmodel = smpl_model(betas=betas,
                             global_orient=orient,

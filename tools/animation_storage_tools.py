@@ -31,7 +31,7 @@ def save_pc2(filename, data):
                                    float(data[f_id][v_id][2]))
                 f.write(vert)
 
-    print('Saved:', filename)
+    print(f'Saved: {filename}')
 
 
 def save_kaolin_mesh(

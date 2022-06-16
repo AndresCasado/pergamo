@@ -3,6 +3,7 @@ import os
 import pickle as pkl
 
 import torch
+import tqdm
 
 from encoder.pose_encoder_10D_torch import PoseEncoder10D
 
@@ -12,7 +13,8 @@ def encode_sequence(directory, sequence, pose_encoder):
     regex_pkl_filenames = glob.glob(os.path.join(directory, sequence, regex_pkl))
     regex_pkl_filenames.sort()
 
-    for filename in regex_pkl_filenames:
+    iterator = tqdm.tqdm(regex_pkl_filenames, desc="Encoding poses")
+    for filename in iterator:
         body_pose_as_angleaxis = pkl.load(open(filename, "rb"))
         body_pose_as_angleaxis = body_pose_as_angleaxis.reshape([1, 23 * 3])
         body_pose_as_angleaxis = torch.from_numpy(body_pose_as_angleaxis).float()

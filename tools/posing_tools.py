@@ -1,9 +1,9 @@
 import typing
 
+import kaolin.io.obj as kaobj
 import smplx
 import smplx.lbs as smplx_lbs
 import torch
-import trimesh
 
 
 def custom_lbs(vertices, joint_transforms, skinning_weights, inverse=False):
@@ -109,7 +109,7 @@ class Poser:
 def load_poser():
     smpl_model = smplx.create('data/smpl/smpl_neutral.pkl')
     smpl_layer = smplx.build_layer('data/smpl/smpl_neutral.pkl')
-    template_verts = torch.from_numpy(trimesh.load_mesh('data/mean_shirt.obj', process=False).vertices).float()
+    template_verts = kaobj.import_mesh('data/mean_shirt.obj').vertices
 
     poser = Poser(smplx_model=smpl_model)
 
