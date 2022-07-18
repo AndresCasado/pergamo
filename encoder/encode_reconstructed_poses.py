@@ -40,7 +40,6 @@ def encode_sequence(dir, sequence, pose_encoder):
         body_poses_as_matrix = pkl.load(open(filename, "rb"))
         body_poses_as_angleaxis = R.from_matrix(body_poses_as_matrix).as_rotvec()
 
-        # This reproduces the smoothing performed during reconstruction
         if body_poses_as_angleaxis_smooth is None:
             body_poses_as_angleaxis_smooth = body_poses_as_angleaxis
         else:
@@ -51,6 +50,7 @@ def encode_sequence(dir, sequence, pose_encoder):
             )
 
         bp_angle_smooth_reshaped = body_poses_as_angleaxis_smooth.reshape(1, 23 * 3)
+        bp_angle_smooth_reshaped = torch.from_numpy(bp_angle_smooth_reshaped).float()
         body_poses_encoded = pose_encoder.forward(bp_angle_smooth_reshaped)
         output_filename = filename.replace("_bp.pkl", "_enc.pkl")
         torch.save(body_poses_encoded, output_filename)
