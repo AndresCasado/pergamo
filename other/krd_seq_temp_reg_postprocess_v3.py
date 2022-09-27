@@ -11,18 +11,17 @@ import numpy as np
 import smplx as pysmplx
 import torch
 import torch.nn.functional as F
+import torchvision.utils as tvutils
 import tqdm
-import cv2
 
-import urjc_lib.kaohelpers as kaohelpers
-import urjc_lib.math.igor_vertices as igoverts
-import urjc_lib.optimization.loggers as myloggers
-import urjc_lib.optimization.vae_pose_kaolin as vpk
-import urjc_lib.smpl_fit_kaolin
-from urjc_lib.math.custom_kaolin_laplacian import laplacian_cot_curvature_or_something
-from urjc_lib.math.image_gradient import image_gradient_fun
-from urjc_lib.math.kaolin_edges import lengths
-from urjc_lib.models.meshoffsetautoencoder import MeshOffsetVAE
+from tools.animation_storage_tools import save_kaolin_mesh
+from tools.collision_tools import push_vertices
+from tools.custom_logging import ImageLogger, LossLogger, MeshLogger
+from tools.image_gradient import compute_image_gradient
+from tools.kaolin_rendering import KaolinExPoseRenderer
+from tools.mesh_edge_lengths import compute_mesh_edge_lengths
+from tools.posing_tools import compute_lbs_weights, TshirtPoser, TshirtOffsetter
+from tools.vae import MeshOffsetVAE
 
 parsing_categories = [
     'Background',
@@ -48,9 +47,12 @@ parsing_categories = [
 ]
 
 
-def warn_and_wait(message):
-    warnings.warn(message)
-    input('Continue?\n')
+def change_range(tensor, oldmin=None, oldmax=None, newmin=0.0, newmax=1.0):
+    if oldmin is None:
+        oldmin = tensor.min()
+    if oldmax is None:
+        oldmax = tensor.max()
+    return (tensor - oldmin) / (oldmax - oldmin) * (newmax - newmin) + newmin
 
 
 def read_converted_expose_path(filepath):
@@ -67,30 +69,8 @@ def read_converted_expose_path(filepath):
         else:
             raise TypeError(f"I don't understand the extension {extension}")
     else:
-        raise FileNotFoundError('The file with the conversion does not exist.')
-        smpl_params = urjc_lib.smpl_fit_kaolin.fit_smpl_to_expose(
-            expose_npz_path,
-            smplx_model_path,
-            smpl_model_path,
-            debug=True,
-        )
-        smpl_params = {
-            k: smpl_params[k].detach()
-            for k in smpl_params
-        }
-        torch.save(smpl_params, filepath)
-
+        raise FileNotFoundError(f'The file with the conversion does not exist: {filepath}')
     return smpl_params
-
-
-def read_silhouette(filepath):
-    loaded = np.load(filepath)
-    up_cat = parsing_categories.index('Upper-clothes')
-    silhouette_prob_argmax = loaded.argmax(axis=2)
-    silhouette = np.where(silhouette_prob_argmax == 5, 1.0, 0.0)
-    silhouette = torch.from_numpy(silhouette)
-
-    return silhouette
 
 
 def read_silhouette_new(filepath):
@@ -130,8 +110,8 @@ def process_one(
 ):
     DEVICE = torch.device('cuda')
 
-    VAE_REG_WEIGHT = 0.01 #0.04
-    TMP_REG_WEIGHT = 1 # 15.0
+    VAE_REG_WEIGHT = 0.01  # 0.04
+    TMP_REG_WEIGHT = 1  # 15.0
 
     normals = torch.where(
         silhouette.unsqueeze(-1) > 0.5,  # Condition
@@ -167,14 +147,19 @@ def process_one(
     is_not_boundary[boundary_vertices] = [0, 0, 0]
     is_not_boundary = torch.from_numpy(is_not_boundary).to(DEVICE)
 
-    lbs = igoverts.compute_skinning_weights(
+    lbs = compute_lbs_weights(
         tshirt_obj.vertices,
         smpl_model().vertices[0],
         smpl_model.lbs_weights,
     )
-    tshirt_poser = vpk.TshirtPoser(smpl_model=smpl_model, lbs_weights=lbs, **smpl_params)
+    tshirt_poser = TshirtPoser(
+        smpl_model=smpl_model,
+        lbs_weights=lbs,
+        **smpl_params,
+        device=torch.device('cuda'),
+    )
 
-    renderer = kaohelpers.KaolinExPoseRenderer(
+    renderer = KaolinExPoseRenderer(
         512, 512,
         # 600, 600,
         expose_params=expose,
@@ -186,11 +171,11 @@ def process_one(
     autoencoder = autoencoder.to(DEVICE)
     autoencoder.load_state_dict(autoencoder_state_dict)
 
-    offsetter = vpk.TshirtOffsetter(vertices=tshirt_vs)
+    offsetter = TshirtOffsetter(vertices=tshirt_vs)
 
-    im_logger = myloggers.ImageLogger(log_path, every=10)
-    loss_logger = myloggers.LossLogger(script_meaning)
-    mesh_logger = myloggers.MeshLogger(log_path, every=30)
+    im_logger = ImageLogger(log_path, every=10)
+    loss_logger = LossLogger(script_meaning)
+    mesh_logger = MeshLogger(log_path, every=30)
 
     loss_fun = torch.nn.MSELoss()
     gt_improb = silhouette[None].clone().to(DEVICE).float()
@@ -229,8 +214,8 @@ def process_one(
             'loss_reg_temporal_vae': loss_reg_temporal_vae
         }
         log_images = {
-            'normal': vpk.change_range(imnormal, -1., 1.),
-            'diff': vpk.change_range(normal_diff, -2., 2.),
+            'normal': change_range(imnormal, -1., 1.),
+            'diff': change_range(normal_diff, -2., 2.),
         }
         log_meshes = {
             'mesh': (posed_tshirt, tshirt_fs),
@@ -280,8 +265,8 @@ def process_one(
             'loss_reg_temporal_vae': loss_reg_temporal_vae
         }
         log_images = {
-            'normal': vpk.change_range(imnormal, -1., 1.),
-            'diff': vpk.change_range(normal_diff, -2., 2.)
+            'normal': change_range(imnormal, -1., 1.),
+            'diff': change_range(normal_diff, -2., 2.)
         }
         log_meshes = {
             'mesh': (posed_tshirt, tshirt_fs),
@@ -300,8 +285,8 @@ def process_one(
         free_moved_tshirt = t_pose_tshirt + free_vertex
         posed_tshirt = tshirt_poser(free_moved_tshirt)
 
-        t_posed_lengths = lengths(t_pose_tshirt[0], tshirt_fs)
-        freemoved_lengths = lengths(free_moved_tshirt[0], tshirt_fs)
+        t_posed_lengths = compute_mesh_edge_lengths(t_pose_tshirt[0], tshirt_fs)
+        freemoved_lengths = compute_mesh_edge_lengths(free_moved_tshirt[0], tshirt_fs)
 
         render_result = renderer(
             posed_tshirt,
@@ -311,9 +296,10 @@ def process_one(
         (imnormal,), _, _ = render_result
         imnormal = F.interpolate(imnormal[None], size=(512, 512, 3))[0]
 
-        horizontal_gradient_diff = image_gradient_fun(imnormal) - image_gradient_fun(gt_imnormal[None])
+        horizontal_gradient_diff = compute_image_gradient(imnormal) - compute_image_gradient(gt_imnormal[None])
         horizontal_gradient_diff *= last_improb_of_next_loss.unsqueeze(-1)
-        vertical_gradient_diff = image_gradient_fun(imnormal, True) - image_gradient_fun(gt_imnormal[None], True)
+        vertical_gradient_diff = compute_image_gradient(imnormal, True) - compute_image_gradient(gt_imnormal[None],
+                                                                                                 True)
         vertical_gradient_diff *= last_improb_of_next_loss.unsqueeze(-1)
         loss_imnormal = horizontal_gradient_diff.square().mean() + vertical_gradient_diff.square().mean()
 
@@ -340,9 +326,9 @@ def process_one(
             'loss_reg_temporal_offset': loss_reg_temporal_offset
         }
         log_images = {
-            'normal': vpk.change_range(imnormal, -1., 1.),
-            'normal-gt': vpk.change_range(gt_imnormal[None], -1., 1.),
-            'diff': vpk.change_range(horizontal_gradient_diff, -2., 2.)
+            'normal': change_range(imnormal, -1., 1.),
+            'normal-gt': change_range(gt_imnormal[None], -1., 1.),
+            'diff': change_range(horizontal_gradient_diff, -2., 2.)
         }
         log_meshes = {
             'mesh': (posed_tshirt, tshirt_fs),
@@ -359,14 +345,14 @@ def process_one(
     if vae_prev_param is not None:
         it_vae = 15
         input_x = torch.clone(vae_prev_param).requires_grad_(True).to(DEVICE)
-        print('Vae norm:' + str(vae_prev_param.square().mean()))
+        print(f'Vae norm: {vae_prev_param.square().mean()}')
 
     it_vertex = 200
     free_vertex = torch.zeros_like(tshirt_vs, requires_grad=True, device=DEVICE)
     if offset_prev_param is not None:
         it_vertex = 31
-        print('Vert norm:' + str(offset_prev_param.square().mean()))
-        print('Vert max:' + str(torch.max(offset_prev_param)))
+        print(f'Vert norm: {offset_prev_param.square().mean()}')
+        print(f'Vert max: {offset_prev_param.max()}')
         offset_prev_param = torch.clamp(offset_prev_param, -0.019, 0.019)
         offset_prev_param[..., [0, 1]] = torch.clamp(offset_prev_param[..., [0, 1]], -0.0039, 0.0039)
         free_vertex = torch.clone(offset_prev_param).requires_grad_(True).to(DEVICE)
@@ -379,10 +365,12 @@ def process_one(
         torch.optim.Adam([free_vertex], lr=1e-4)
     ]
 
+    OptimizationStep = namedtuple('OptimizationStep', ['loss', 'iterations'])
+
     optimization_steps = [
-        vpk.OptimizationStep(loss_only_silhouette, it_vae),
-        vpk.OptimizationStep(loss_normal_and_silhouette_vpk, it_vae),
-        vpk.OptimizationStep(loss_vpk_freevertex_lengths, it_vertex)
+        OptimizationStep(loss_only_silhouette, it_vae),
+        OptimizationStep(loss_normal_and_silhouette_vpk, it_vae),
+        OptimizationStep(loss_vpk_freevertex_lengths, it_vertex)
     ]
 
     for adam, step in zip(adams, optimization_steps, ):
@@ -402,7 +390,6 @@ def process_one(
             })
 
     # Postprocess
-    from urjc_lib.math.mesh_postprocess import push_vertices
 
     input_x, free_vertex = parameters
     input_x = input_x.requires_grad_(False)
@@ -419,25 +406,25 @@ def process_one(
     )
 
     render_result = renderer(
-            torch.from_numpy(pushed_vertices).unsqueeze(0).cuda(),
-            faces=tshirt_fs,
+        torch.from_numpy(pushed_vertices).unsqueeze(0).cuda(),
+        faces=tshirt_fs,
     )
 
     rest, name = os.path.split(log_path)
     (imnormal,), _, _ = render_result
-    imnormal = imnormal.squeeze().cpu().detach().numpy()
-    imnormal = (imnormal + 1) / 2.0 * 65535
-    imnormal = imnormal.astype(np.uint16)
-    imnormal = imnormal[..., [2, 1, 0]]
-    cv2.imwrite(os.path.join(rest, 'pushed_' + name + '.png'), imnormal)
 
-    kaohelpers.save_kaolin_mesh(
+    tvutils.save_image(
+        tensor=(imnormal * 0.5 + 0.5)[0].permute((2, 0, 1)),
+        fp=os.path.join(rest, 'pushed_' + name + '.png'),
+    )
+
+    save_kaolin_mesh(
         os.path.join(rest, 'pushed_' + name + '.obj'),
         pushed_vertices,
         tshirt_fs,
     )
 
-    kaohelpers.save_kaolin_mesh(
+    save_kaolin_mesh(
         os.path.join(rest, 'body_' + name + '.obj'),
         real_body.vertices.cpu().detach()[0],
         smpl_model.faces.astype(np.int32),
@@ -445,31 +432,7 @@ def process_one(
     return [input_x, free_vertex]
 
 
-def run():
-    template_obj_path = '/home/mslab/Models/tshirt_4424verts.obj'
-    out_folder = 'out_dan'
-    filename = 'dan'
-    smplx_model_path = 'models/smplx/SMPLX_NEUTRAL.npz'
-    smpl_model_path = 'models/smpl/smpl_neutral.pkl'
-    converted_expose_path = 'out_dan/smplx/dan.png_000.pkl'
-    autoencoder_state_dict_path = 'offset_vae_test.torch'
-    script_meaning = 'rd_edges_study'
-    log_path = f'data/kaolin/{script_meaning}'
-
-    process_one(
-        template_obj_path,
-        out_folder,
-        filename,
-        smplx_model_path,
-        smpl_model_path,
-        converted_expose_path,
-        autoencoder_state_dict_path,
-        script_meaning,
-        log_path,
-    )
-
-
-buff_base = '/home/marc/DatosBuff'
+buff_base = '../data/DatosBuff'
 
 
 def check_all_buff(seq):
@@ -567,7 +530,9 @@ def all_buff_marc_files():
         'dan-014',
     ]
     buff_seqs = ["shortlong_hips_96"]
-    script_meaning = 'SEQ_real_data_mslab002'
+
+    script_meaning = 'SEQ_reconstruction'
+
     suff = input(f'Add suffix? {script_meaning} ')
     if suff:
         suff = suff.split(' ')
@@ -577,35 +542,35 @@ def all_buff_marc_files():
         valid = check_all_buff(seq)
 
         if not valid:
-            warnings.warn(f'Me salto {seq}')
+            warnings.warn(f'Skipping sequence {seq} because it is not valid')
             continue
 
-        template_obj_path = 'tshirt_4424verts.obj'
-        smplx_model_path = 'models/smplx/SMPLX_NEUTRAL.npz'
-        smpl_model_path = 'models/smpl/smpl_neutral.pkl'
-        autoencoder_state_dict_path = 'offset_vae_test.torch'
+        template_obj_path = '../data/Models/tshirt_4424verts.obj'
+        smplx_model_path = 'models/smplx/SMPLX_NEUTRAL.npz'  # TODO Unused
+        smpl_model_path = '../data/smpl/smpl_neutral.pkl'
+        autoencoder_state_dict_path = '../data/offset_vae_test.torch'
 
-        p = os.path.join(buff_base, seq)
-        expose_ffff = os.path.join(buff_base, seq + '_expose')
+        expose_folder = os.path.join(buff_base, f'{seq}_expose')
 
-        expose_files = list(sorted(os.listdir(expose_ffff)))
-        expose_pattern = re.compile(r'(\d+)\.png_\d+')
+        expose_files = list(sorted(os.listdir(expose_folder)))
+        expose_pattern = re.compile(r'.*\.(\d+)\.ply\.png_\d+')
         expose = {}
         print('Reading poses')
         for r in tqdm.tqdm(expose_files):
             match = expose_pattern.match(r)
             frame = int(match[1])
-            for root_dir, directories, files in os.walk(os.path.join(expose_ffff, r)):
+            for root_dir, directories, files in os.walk(os.path.join(expose_folder, r)):
                 npz_file = [file for file in files if file.endswith('.npz')][0]
-                this_expose = np.load(os.path.join(expose_ffff, r, npz_file), allow_pickle=True)
+                this_expose = np.load(os.path.join(expose_folder, r, npz_file), allow_pickle=True)
                 w = {x: this_expose[x] for x in this_expose}
                 expose[frame] = w
 
         smpl_params = {}
         smpl_converted_directory = f'{buff_base}/{seq}_smpl'
-        smpl_pattern = re.compile(r'(\d+)\.png_\d+\.pkl')
+        smpl_pattern = re.compile(r'.*\.(\d+)\.ply\.png_\d+\.pkl')
         print('Loading converted poses')
-        for file in tqdm.tqdm(os.listdir(smpl_converted_directory)):
+        list_converted_poses = os.listdir(smpl_converted_directory)
+        for file in tqdm.tqdm(list_converted_poses):
             match = smpl_pattern.match(file)
             if match:
                 frame = int(match[1])
@@ -613,7 +578,7 @@ def all_buff_marc_files():
                 smpl_params[frame] = smpl_loaded
 
         silhouettes = {}
-        npy_pattern = re.compile(r'(\d+)_tshirt\.npy')
+        npy_pattern = re.compile(r'.*\.(\d+)\.ply_tshirt\.npy')
         print('Reading silhouettes')
         where_silhouettes = f'{buff_base}/{seq}_parsing'
         for file in tqdm.tqdm(os.listdir(where_silhouettes)):
@@ -626,7 +591,7 @@ def all_buff_marc_files():
                 silhouettes[frame] = read_sil
 
         pifu_result_normals = {}
-        pifu_pattern = re.compile(r'result_(\d+)_512\.png')
+        pifu_pattern = re.compile(r'.*\.(\d+)\.ply_512\.png')
         pifu_directory = f'{buff_base}/{seq}_pifu'
         print('Reading Pifu normals')
         for file in tqdm.tqdm(os.listdir(pifu_directory)):
@@ -637,15 +602,18 @@ def all_buff_marc_files():
             else:
                 raise ValueError(f"This shouldn't happen. Bad file? {file}")
 
-        os.makedirs('/tmp/retesting_pipeline', exist_ok=True)
+        output_dir = '../output/'
+
+        os.makedirs(output_dir, exist_ok=True)
+
         for i in expose:
             # log_path = f'/mnt/HDDTera/auto_results/{script_meaning}-{seq}_{subject}/frame{i:04d}'
-            log_path = f'/tmp/mslab_seqs/{script_meaning}-{seq}/frame{i:04d}'
+            log_path = os.path.join(output_dir, f'{script_meaning}-{seq}/frame{i:04d}')
             os.makedirs(log_path, exist_ok=True)
 
             this_dict = {
                 'template_obj_path': template_obj_path,
-                'smplx_model_path': smplx_model_path,
+                'smplx_model_path': smplx_model_path,  # TODO Unused
                 'smpl_model_path': smpl_model_path,
                 'smpl_params': smpl_params[i],  # Converted SMPL-X to SMPL
                 'autoencoder_state_dict_path': autoencoder_state_dict_path,
@@ -670,18 +638,18 @@ PreviousFrame = namedtuple(
 
 
 def run_sequence(
-        info: typing.List[typing.Dict[str, typing.Any]]
+        info_dicts: typing.Callable[[], typing.Iterable[typing.Dict]]
 ):
     prev_frame = PreviousFrame(None, None, None)
-    for i in info():
-        smpl_params = i['smpl_params']
+    for info_dict in info_dicts():
+        smpl_params = info_dict['smpl_params']
         if prev_frame.smpl_params is not None:
             for k in smpl_params:
                 if smpl_params[k] is not None:
-                    smpl_params[k] = smpl_params[k] * 0.5 + prev_frame.smpl_params[k] * 0.5
+                    smpl_params[k] = smpl_params[k] * 0.5 + prev_frame.smpl_params[k] * 0.5  # TODO Interpolation
                     smpl_params[k] = smpl_params[k].detach()
         optimized_parameters = process_one(
-            **i,
+            **info_dict,
             vae_prev_param=prev_frame.vae_param,
             offset_prev_param=prev_frame.offset,
         )
@@ -694,8 +662,53 @@ def run_sequence(
         )
 
 
+def one_dan_file():
+    input_folder = '/mnt/HDDTera/DatosDan'
+
+    def read_expose(filepath):
+        this_expose = np.load(filepath, allow_pickle=True)
+        w = {x: this_expose[x] for x in this_expose}
+        return w
+
+    expose_converted_data = read_converted_expose_path(
+        os.path.join(input_folder, 'dan-001_smpl/0086.jpg_044.pkl'),
+    )
+
+    normals = read_pifu_normals(
+        os.path.join(input_folder, 'dan-001_pifu/result_0086_512.png')
+    )
+
+    silhouette = F.interpolate(
+        read_silhouette_new(
+            os.path.join(input_folder, 'dan-001_parsing/0086_tshirt.npy')
+        )[None, None],
+        size=(512, 512)
+    )[0, 0]
+
+    expose_data = read_expose(
+        os.path.join(input_folder, 'dan-001_expose/0086.jpg_044/0086.jpg_044_params.npz'),
+    )
+
+    d = {
+        'template_obj_path': '../data/tshirt_4424verts.obj',
+        'smplx_model_path': 'models/smplx/SMPLX_NEUTRAL.npz',  # TODO Unused
+        'smpl_model_path': '../data/smpl/smpl_neutral.pkl',
+        'script_meaning': 'dan_one_file',
+        'log_path': '../output/dan_seq',
+        'autoencoder_state_dict_path': '../data/offset_vae_test.torch',
+
+        'smpl_params': expose_converted_data,
+        'pifu_result_normals': normals,
+        'silhouette': silhouette,
+        'expose': expose_data,
+    }
+    yield d
+
+
 def main():
     info_dicts = all_buff_marc_files
+    info_dicts = one_dan_file
+
     run_sequence(info_dicts)
 
 
