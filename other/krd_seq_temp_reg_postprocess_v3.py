@@ -162,6 +162,7 @@ def process_one(
     )
 
     renderer = KaolinExPoseRenderer(
+        # TODO This should be parameterized
         512, 512,
         # 600, 600,
         expose_params=expose,
@@ -664,6 +665,48 @@ def run_sequence(
         )
 
 
+def run_sequence_loading_data(
+        info_dicts: typing.Iterable[typing.Dict[str, str]]
+):
+    prev_frame = PreviousFrame(None, None, None)
+    for info_dict in info_dicts:
+        smpl_params_path = info_dict['smpl_params']
+
+        smpl_params = read_converted_expose_path(smpl_params_path)
+        info_dict['smpl_params'] = smpl_params
+
+        silhouette = read_silhouette_new(info_dict['silhouette'])
+        silhouette = F.interpolate(silhouette[None, None], size=(512, 512))[0, 0]
+        info_dict['silhouette'] = silhouette
+
+        expose_path = info_dict['expose']
+        expose_np_loaded = np.load(expose_path, allow_pickle=True)
+        expose = {x: expose_np_loaded[x] for x in expose_np_loaded}
+        info_dict['expose'] = expose
+
+        pifu_result_normals = read_pifu_normals(info_dict['pifu_result_normals'])
+        info_dict['pifu_result_normals'] = pifu_result_normals
+
+        if prev_frame.smpl_params is not None:
+            for k in smpl_params:
+                if smpl_params[k] is not None:
+                    smpl_params[k] = smpl_params[k] * 0.5 + prev_frame.smpl_params[k] * 0.5  # TODO Interpolation
+                    smpl_params[k] = smpl_params[k].detach()
+        optimized_parameters = process_one(
+            **info_dict,
+            vae_prev_param=prev_frame.vae_param,
+            offset_prev_param=prev_frame.offset,
+        )
+
+        vae_prev_param, offset_prev_param = optimized_parameters  # type: torch.Tensor, torch.Tensor
+        prev_frame = PreviousFrame(
+
+            smpl_params,
+            vae_prev_param,
+            offset_prev_param,
+        )
+
+
 def one_dan_file():
     input_folder = '/mnt/HDDTera/DatosDan'
 
@@ -712,6 +755,85 @@ def old_main():
     info_dicts = one_dan_file
 
     run_sequence(info_dicts)
+
+
+def process_sequence(
+        sequence_name,
+        base_directory,
+        tshirt_template_path,
+        smpl_model_path,
+        vae_state_dict_path,
+        output_path,
+) -> typing.Iterable[typing.Dict[str, str]]:
+    # region ExPose
+    expose_folder = os.path.join(base_directory, sequence_name, sequence_name + '_expose')
+    expose_subfolders = list(sorted(os.listdir(expose_folder)))
+    expose_pattern = re.compile(r'.*\.(\d+)\.ply\.png_\d+')
+    expose_params = {}
+    for curr_subfolder in tqdm.tqdm(expose_subfolders, desc="Saving ExPose poses paths"):
+        match = expose_pattern.match(curr_subfolder)
+        frame = int(match[1])
+
+        npz_file_path = os.path.join(expose_folder, curr_subfolder, curr_subfolder + '_params.npz')
+        expose_params[frame] = npz_file_path
+
+    # endregion
+
+    # region SMPL-converted poses
+    smpl_params_folder = os.path.join(base_directory, sequence_name, sequence_name + '_smpl')
+    smpl_pattern = re.compile(r'.*\.(\d+)\.ply\.png_\d+\.pkl')
+    smpl_params = {}
+    for file in tqdm.tqdm(os.listdir(smpl_params_folder), desc="Saving SMPL-converted poses paths"):
+        match = smpl_pattern.match(file)
+        if match:
+            frame = int(match[1])
+            smpl_path_to_load = os.path.join(smpl_params_folder, file)
+            smpl_params[frame] = smpl_path_to_load
+    # endregion
+
+    # region Silhouettes
+    silhouettes_folder = os.path.join(base_directory, sequence_name, sequence_name + '_parsing')
+    silhouette_pattern = re.compile(r'.*\.(\d+)\.ply_tshirt\.npy')
+    silhouettes = {}
+    for file in tqdm.tqdm(os.listdir(silhouettes_folder), desc="Saving silhouettes paths"):
+        match = silhouette_pattern.match(file)
+        if match:
+            frame = int(match[1])
+            sil_path = os.path.join(silhouettes_folder, file)
+            silhouettes[frame] = sil_path
+    # endregion
+
+    # region Normals from PifuHD
+    pifu_folder = os.path.join(base_directory, sequence_name, sequence_name + '_pifu')
+    pifu_pattern = re.compile(r'.*\.(\d+)\.ply_512\.png')
+    pifu_normals = {}
+    for file in tqdm.tqdm(os.listdir(pifu_folder), desc="Saving Pifu normals paths"):
+        match = pifu_pattern.match(file)
+        if match:
+            frame = int(match[1])
+            pifu_normals[frame] = os.path.join(pifu_folder, file)
+        else:
+            raise ValueError(f"This shouldn't happen. Bad file? {file}")
+
+    # endregion
+
+    script_meaning = 'reconstruction'
+    for frame in expose_params:
+        log_path = os.path.join(output_path, f'{script_meaning}-{sequence_name}/frame{frame:04d}')
+        this_dict = {
+            'template_obj_path': tshirt_template_path,
+            'smplx_model_path': 'THIS IS NOT USED',
+            'smpl_model_path': smpl_model_path,
+            'smpl_params': smpl_params[frame],
+            'autoencoder_state_dict_path': vae_state_dict_path,
+            'script_meaning': script_meaning,
+            'log_path': log_path,
+            'pifu_result_normals': pifu_normals[frame],
+            'silhouette': silhouettes[frame],
+            'expose': expose_params[frame],
+        }
+
+        yield this_dict
 
 
 def main():
@@ -782,7 +904,8 @@ def main():
 
     os.makedirs(output_path, exist_ok=True)
 
-    for seq_name in os.listdir(base_directory):
+    sequence_folders = os.listdir(base_directory)
+    for seq_name in sequence_folders:
         for sub_type in ['smpl', 'expose', 'pifu', 'parsing']:
             full_subdir_path = os.path.join(base_directory, seq_name, f'{seq_name}_{sub_type}')
             exists = os.path.exists(full_subdir_path)
@@ -795,15 +918,17 @@ def main():
     else:
         print('All sequences are correct')
 
-    data = {
-        'base_directory': base_directory,
-        'tshirt_template_path': tshirt_template_path,
-        'smpl_path': smpl_path,
-        'vae_state_dict_path': vae_state_dict_path,
-        'output_path': output_path,
-    }
+    for sequence_folder in sequence_folders:
+        processed_sequence_information = process_sequence(
+            sequence_name=sequence_folder,
+            base_directory=base_directory,
+            tshirt_template_path=tshirt_template_path,
+            smpl_model_path=smpl_path,
+            vae_state_dict_path=vae_state_dict_path,
+            output_path=output_path,
+        )
 
-    return data
+        run_sequence_loading_data(processed_sequence_information)
 
 
 if __name__ == '__main__':
