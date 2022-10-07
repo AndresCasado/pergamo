@@ -10,7 +10,7 @@ from collections import namedtuple
 import kaolin.io.obj as kaobj
 import matplotlib.pyplot as plt
 import numpy as np
-import smplx as pysmplx
+import smplx
 import torch
 import torch.nn.functional as F
 import torchvision.utils as tvutils
@@ -24,29 +24,6 @@ from tools.kaolin_rendering import KaolinExPoseRenderer
 from tools.mesh_edge_lengths import compute_mesh_edge_lengths
 from tools.posing_tools import compute_lbs_weights, TshirtPoser, TshirtOffsetter
 from tools.vae import MeshOffsetVAE
-
-parsing_categories = [
-    'Background',
-    'Hat',
-    'Hair',
-    'Glove',
-    'Sunglasses',
-    'Upper-clothes',
-    'Dress',
-    'Coat',
-    'Socks',
-    'Pants',
-    'Jumpsuits',
-    'Scarf',
-    'Skirt',
-    'Face',
-    'Left-arm',
-    'Right-arm',
-    'Left-leg',
-    'Right-leg',
-    'Left-shoe',
-    'Right-shoe',
-]
 
 
 def change_range(tensor, oldmin=None, oldmax=None, newmin=0.0, newmax=1.0):
@@ -97,7 +74,6 @@ def read_pifu_normals(filepath):
 
 def process_one(
         template_obj_path: str,
-        smplx_model_path: str,
         smpl_model_path: str,
         smpl_params,
         autoencoder_state_dict_path: str,
@@ -127,7 +103,7 @@ def process_one(
     # tvutils.save_image(normals.permute(2, 0, 1), 'normalitas.png')
 
     # SMPL-X
-    smpl_model = pysmplx.build_layer(smpl_model_path)
+    smpl_model = smplx.build_layer(smpl_model_path)
 
     tshirt_obj = kaobj.import_mesh(template_obj_path)
     tshirt_vs = tshirt_obj.vertices[None].to(DEVICE)
@@ -435,240 +411,20 @@ def process_one(
     return [input_x, free_vertex]
 
 
-buff_base = '../data/DatosBuff'
-
-
-def check_all_buff(seq):
-    b = [
-        seq + x
-        for x in [
-            '',
-            '_smpl',
-            '_pifu',
-            '_expose',
-            '_parsing'
-        ]
-    ]
-    valid = True
-    for s in b:
-        exists = os.path.exists(os.path.join(buff_base, s))
-        valid = valid and exists
-    if valid:
-        print(f'{seq} vale')
-    else:
-        print(f'{seq} no vale')
-
-    return valid
-
-
-def all_buff_marc_files():
-    buff_seqs = [
-        'mslab002-red-hips',
-        'mslab002-red-legs',
-        'mslab002-red-shoulders-backwards',
-        'mslab002-red-twist',
-        'mslab002-red-walk',
-        'mslab002-white-hips',
-        'mslab002-white-legs',
-        'mslab002-white-shoulders-backwards',
-        'mslab002-white-twist',
-        'mslab002-white-walk',
-    ]
-    buff_seqs = [
-        'clip-02600',
-        'clip-06100',
-        'clip-06300',
-    ]
-    buff_seqs = [
-        'dan-101',
-        'dan-102',
-        'dan-103',
-        'dan-104',
-        'dan-105',
-        'dan-106',
-        'dan-107',
-        'dan-108',
-        'dan-109',
-        'dan-110',
-        'dan-111',
-        'dan-112',
-        'dan-201',
-        'dan-202',
-        'dan-203',
-        'dan-204',
-        'dan-205',
-        'dan-206',
-        'dan-207',
-        'dan-208',
-        'dan-209',
-        'dan-210',
-        'dan-211',
-        'dan-212',
-        'dan-213',
-        'dan-214',
-        'dan-301',
-        'dan-302',
-        'dan-303',
-        'dan-304',
-        'dan-305',
-        'dan-306',
-        'dan-307',
-        'dan-308',
-        'dan-309',
-    ]
-    buff_seqs = [
-        'dan-001',
-        'dan-002',
-        'dan-003',
-        'dan-004',
-        'dan-005',
-        'dan-006',
-        'dan-007',
-        'dan-008',
-        'dan-009',
-        'dan-010',
-        'dan-011',
-        'dan-012',
-        'dan-013',
-        'dan-014',
-    ]
-    buff_seqs = ["shortlong_hips_96"]
-
-    script_meaning = 'SEQ_reconstruction'
-
-    suff = input(f'Add suffix? {script_meaning} ')
-    if suff:
-        suff = suff.split(' ')
-        script_meaning = '_'.join([script_meaning, *suff])
-
-    for seq in buff_seqs:
-        valid = check_all_buff(seq)
-
-        if not valid:
-            warnings.warn(f'Skipping sequence {seq} because it is not valid')
-            continue
-
-        template_obj_path = '../data/Models/tshirt_4424verts.obj'
-        smplx_model_path = 'models/smplx/SMPLX_NEUTRAL.npz'  # TODO Unused
-        smpl_model_path = '../data/smpl/smpl_neutral.pkl'
-        autoencoder_state_dict_path = '../data/offset_vae_test.pth'
-
-        expose_folder = os.path.join(buff_base, f'{seq}_expose')
-
-        expose_files = list(sorted(os.listdir(expose_folder)))
-        expose_pattern = re.compile(r'.*\.(\d+)\.ply\.png_\d+')
-        expose = {}
-        print('Reading poses')
-        for r in tqdm.tqdm(expose_files):
-            match = expose_pattern.match(r)
-            frame = int(match[1])
-            for root_dir, directories, files in os.walk(os.path.join(expose_folder, r)):
-                npz_file = [file for file in files if file.endswith('.npz')][0]
-                this_expose = np.load(os.path.join(expose_folder, r, npz_file), allow_pickle=True)
-                w = {x: this_expose[x] for x in this_expose}
-                expose[frame] = w
-
-        smpl_params = {}
-        smpl_converted_directory = f'{buff_base}/{seq}_smpl'
-        smpl_pattern = re.compile(r'.*\.(\d+)\.ply\.png_\d+\.pkl')
-        print('Loading converted poses')
-        list_converted_poses = os.listdir(smpl_converted_directory)
-        for file in tqdm.tqdm(list_converted_poses):
-            match = smpl_pattern.match(file)
-            if match:
-                frame = int(match[1])
-                smpl_loaded = read_converted_expose_path(os.path.join(smpl_converted_directory, file))
-                smpl_params[frame] = smpl_loaded
-
-        silhouettes = {}
-        npy_pattern = re.compile(r'.*\.(\d+)\.ply_tshirt\.npy')
-        print('Reading silhouettes')
-        where_silhouettes = f'{buff_base}/{seq}_parsing'
-        for file in tqdm.tqdm(os.listdir(where_silhouettes)):
-            match = npy_pattern.match(file)
-            if match:
-                frame = int(match[1])
-                sil_path = os.path.join(where_silhouettes, file)
-                read_sil = read_silhouette_new(sil_path)
-                read_sil = F.interpolate(read_sil[None, None], size=(512, 512))[0, 0]
-                silhouettes[frame] = read_sil
-
-        pifu_result_normals = {}
-        pifu_pattern = re.compile(r'.*\.(\d+)\.ply_512\.png')
-        pifu_directory = f'{buff_base}/{seq}_pifu'
-        print('Reading Pifu normals')
-        for file in tqdm.tqdm(os.listdir(pifu_directory)):
-            match = pifu_pattern.match(file)
-            if match:
-                frame = int(match[1])
-                pifu_result_normals[frame] = read_pifu_normals(os.path.join(pifu_directory, file))
-            else:
-                raise ValueError(f"This shouldn't happen. Bad file? {file}")
-
-        output_dir = '../output/'
-
-        os.makedirs(output_dir, exist_ok=True)
-
-        for i in expose:
-            # log_path = f'/mnt/HDDTera/auto_results/{script_meaning}-{seq}_{subject}/frame{i:04d}'
-            log_path = os.path.join(output_dir, f'{script_meaning}-{seq}/frame{i:04d}')
-            os.makedirs(log_path, exist_ok=True)
-
-            this_dict = {
-                'template_obj_path': template_obj_path,
-                'smplx_model_path': smplx_model_path,  # TODO Unused
-                'smpl_model_path': smpl_model_path,
-                'smpl_params': smpl_params[i],  # Converted SMPL-X to SMPL
-                'autoencoder_state_dict_path': autoencoder_state_dict_path,
-                'script_meaning': script_meaning,
-                'log_path': log_path,
-                'pifu_result_normals': pifu_result_normals[i],
-                'silhouette': silhouettes[i],
-                'expose': expose[i],  # SMPL-X from ExPose
-
-            }
-            yield this_dict
-
-
-PreviousFrame = namedtuple(
-    'PreviousFrame',
-    [
-        'smpl_params',
-        'vae_param',
-        'offset',
-    ]
-)
-
-
-def run_sequence(
-        info_dicts: typing.Callable[[], typing.Iterable[typing.Dict]]
-):
-    prev_frame = PreviousFrame(None, None, None)
-    for info_dict in info_dicts():
-        smpl_params = info_dict['smpl_params']
-        if prev_frame.smpl_params is not None:
-            for k in smpl_params:
-                if smpl_params[k] is not None:
-                    smpl_params[k] = smpl_params[k] * 0.5 + prev_frame.smpl_params[k] * 0.5  # TODO Interpolation
-                    smpl_params[k] = smpl_params[k].detach()
-        optimized_parameters = process_one(
-            **info_dict,
-            vae_prev_param=prev_frame.vae_param,
-            offset_prev_param=prev_frame.offset,
-        )
-
-        vae_prev_param, offset_prev_param = optimized_parameters  # type: torch.Tensor, torch.Tensor
-        prev_frame = PreviousFrame(
-            smpl_params,
-            vae_prev_param,
-            offset_prev_param,
-        )
-
-
 def run_sequence_loading_data(
         info_dicts: typing.Iterable[typing.Dict[str, str]]
 ):
+    PreviousFrame = namedtuple(
+        'PreviousFrame',
+        [
+            'smpl_params',
+            'vae_param',
+            'offset',
+        ]
+    )
+
     prev_frame = PreviousFrame(None, None, None)
+
     for info_dict in info_dicts:
         smpl_params_path = info_dict['smpl_params']
 
@@ -705,56 +461,6 @@ def run_sequence_loading_data(
             vae_prev_param,
             offset_prev_param,
         )
-
-
-def one_dan_file():
-    input_folder = '/mnt/HDDTera/DatosDan'
-
-    def read_expose(filepath):
-        this_expose = np.load(filepath, allow_pickle=True)
-        w = {x: this_expose[x] for x in this_expose}
-        return w
-
-    expose_converted_data = read_converted_expose_path(
-        os.path.join(input_folder, 'dan-001_smpl/0086.jpg_044.pkl'),
-    )
-
-    normals = read_pifu_normals(
-        os.path.join(input_folder, 'dan-001_pifu/result_0086_512.png')
-    )
-
-    silhouette = F.interpolate(
-        read_silhouette_new(
-            os.path.join(input_folder, 'dan-001_parsing/0086_tshirt.npy')
-        )[None, None],
-        size=(512, 512)
-    )[0, 0]
-
-    expose_data = read_expose(
-        os.path.join(input_folder, 'dan-001_expose/0086.jpg_044/0086.jpg_044_params.npz'),
-    )
-
-    d = {
-        'template_obj_path': '../data/tshirt_4424verts.obj',
-        'smplx_model_path': 'models/smplx/SMPLX_NEUTRAL.npz',  # TODO Unused
-        'smpl_model_path': '../data/smpl/smpl_neutral.pkl',
-        'script_meaning': 'dan_one_file',
-        'log_path': '../output/dan_seq',
-        'autoencoder_state_dict_path': '../data/offset_vae_test.pth',
-
-        'smpl_params': expose_converted_data,
-        'pifu_result_normals': normals,
-        'silhouette': silhouette,
-        'expose': expose_data,
-    }
-    yield d
-
-
-def old_main():
-    info_dicts = all_buff_marc_files
-    info_dicts = one_dan_file
-
-    run_sequence(info_dicts)
 
 
 def process_sequence(
@@ -822,7 +528,6 @@ def process_sequence(
         log_path = os.path.join(output_path, f'{script_meaning}-{sequence_name}/frame{frame:04d}')
         this_dict = {
             'template_obj_path': tshirt_template_path,
-            'smplx_model_path': 'THIS IS NOT USED',
             'smpl_model_path': smpl_model_path,
             'smpl_params': smpl_params[frame],
             'autoencoder_state_dict_path': vae_state_dict_path,
