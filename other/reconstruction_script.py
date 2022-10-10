@@ -82,6 +82,7 @@ def process_one(
         pifu_result_normals,
         silhouette,
         expose,
+        parsing_resolution,
         vae_prev_param: torch.Tensor,
         offset_prev_param: torch.Tensor,
         show_normals: bool = False,
@@ -138,9 +139,7 @@ def process_one(
     )
 
     renderer = KaolinExPoseRenderer(
-        # TODO This should be parameterized
-        512, 512,
-        # 600, 600,
+        parsing_resolution, parsing_resolution,
         expose_params=expose,
         smooth_normals=True,
     )
@@ -474,7 +473,7 @@ def process_sequence(
     # region ExPose
     expose_folder = os.path.join(base_directory, sequence_name, sequence_name + '_expose')
     expose_subfolders = list(sorted(os.listdir(expose_folder)))
-    expose_pattern = re.compile(r'.*\.(\d+)\.ply\.png_\d+')
+    expose_pattern = re.compile(r'.*?(\d+)\..*_\d+')
     expose_params = {}
     for curr_subfolder in tqdm.tqdm(expose_subfolders, desc="Saving ExPose poses paths"):
         match = expose_pattern.match(curr_subfolder)
@@ -487,7 +486,7 @@ def process_sequence(
 
     # region SMPL-converted poses
     smpl_params_folder = os.path.join(base_directory, sequence_name, sequence_name + '_smpl')
-    smpl_pattern = re.compile(r'.*\.(\d+)\.ply\.png_\d+\.pkl')
+    smpl_pattern = re.compile(r'body_.*?(\d+).*\..*_\d+\.pkl')
     smpl_params = {}
     for file in tqdm.tqdm(os.listdir(smpl_params_folder), desc="Saving SMPL-converted poses paths"):
         match = smpl_pattern.match(file)
@@ -498,8 +497,11 @@ def process_sequence(
     # endregion
 
     # region Silhouettes
+    checked_resolution = False
+    parsing_resolution = None
+
     silhouettes_folder = os.path.join(base_directory, sequence_name, sequence_name + '_parsing')
-    silhouette_pattern = re.compile(r'.*\.(\d+)\.ply_tshirt\.npy')
+    silhouette_pattern = re.compile(r'.*?(\d+).*\.npy')
     silhouettes = {}
     for file in tqdm.tqdm(os.listdir(silhouettes_folder), desc="Saving silhouettes paths"):
         match = silhouette_pattern.match(file)
@@ -507,11 +509,16 @@ def process_sequence(
             frame = int(match[1])
             sil_path = os.path.join(silhouettes_folder, file)
             silhouettes[frame] = sil_path
+
+            if not checked_resolution:
+                loaded_matrix = np.load(sil_path)
+                parsing_resolution, _ = loaded_matrix.shape
+                checked_resolution = True
     # endregion
 
     # region Normals from PifuHD
     pifu_folder = os.path.join(base_directory, sequence_name, sequence_name + '_pifu')
-    pifu_pattern = re.compile(r'.*\.(\d+)\.ply_512\.png')
+    pifu_pattern = re.compile(r'.*?(\d+).*_512\.png')
     pifu_normals = {}
     for file in tqdm.tqdm(os.listdir(pifu_folder), desc="Saving Pifu normals paths"):
         match = pifu_pattern.match(file)
@@ -536,6 +543,7 @@ def process_sequence(
             'pifu_result_normals': pifu_normals[frame],
             'silhouette': silhouettes[frame],
             'expose': expose_params[frame],
+            'parsing_resolution': parsing_resolution,
         }
 
         yield this_dict
