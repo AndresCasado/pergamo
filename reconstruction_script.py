@@ -569,25 +569,25 @@ def main():
     parser.add_argument(
         '--tshirt_template',
         type=str,
-        default='../data/tshirt_4424verts.obj',
+        default='./data/tshirt_4424verts.obj',
         help='Path of the template',
     )
     parser.add_argument(
         '--smpl_path',
         type=str,
-        default='../data/smpl/smpl_neutral.pkl',
+        default='./data/smpl/smpl_neutral.pkl',
         help='Path to SMPL model',
     )
     parser.add_argument(
         '--vae_state_dict',
         type=str,
-        default='../data/offset_vae_test.pth',
+        default='./data/offset_vae_test.pth',
         help='Path to the weights of the VAE',
     )
     parser.add_argument(
         '--output_path',
         type=str,
-        default='../output',
+        default='./output',
         help='Where to output results and logs'
     )
     res = parser.parse_args()
