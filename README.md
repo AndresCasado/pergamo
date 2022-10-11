@@ -13,6 +13,9 @@ The general steps are as follows:
 3. Install IGL bindings ( https://github.com/libigl/libigl-python-bindings )
 4. Install Kaolin ( https://kaolin.readthedocs.io/en/latest/notes/installation.html )
 
+PERGAMO needs SMPL. You can download it from [SMPL](https://smpl.is.tue.mpg.de/). Rename the file from
+`basicmodel_neutral_lbs_10_207_0_v1.1.0.pkl` to `smpl_neutral.pkl` and save it under `data/smpl/`.
+
 ## Datasets
 
 You can download two datasets from [OneDrive](https://urjc-my.sharepoint.com/:f:/r/personal/andres_casado_urjc_es/Documents/PERGAMO_public?csf=1&web=1&e=ObIEZ3).
