@@ -37,7 +37,7 @@ PERGAMO needs SMPL. You can download it from [SMPL](https://smpl.is.tue.mpg.de/)
 ## Datasets
 
 You can download two datasets
-from [OneDrive](https://urjc-my.sharepoint.com/:f:/r/personal/andres_casado_urjc_es/Documents/PERGAMO_public?csf=1&web=1&e=ObIEZ3)
+from [OneDrive](https://urjc-my.sharepoint.com/:f:/g/personal/andres_casado_urjc_es/EuNAwoSGWD5HtT6AsgL8vJcByupY0Tsx4n95vVlh0CDKsw)
 .
 
 DatosBuff contains BUFF sequences, while DatosDan contains our own data.
