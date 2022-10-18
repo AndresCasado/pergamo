@@ -51,8 +51,8 @@ def predict_reconstructed_sequence(
         )
 
     for i in range(1, len(body_poses_as_matrices_all)):
-        end_rotation_mat = body_poses_as_matrices[i][0]
-        start_rotation_mat = body_poses_as_matrices[i - 1][0]
+        end_rotation_mat = body_poses_as_matrices_all[i][0]
+        start_rotation_mat = body_poses_as_matrices_all[i - 1][0]
 
         end_rotation_vec = R.from_matrix(end_rotation_mat).as_rotvec()
         start_rotation_vec = R.from_matrix(start_rotation_mat).as_rotvec()
