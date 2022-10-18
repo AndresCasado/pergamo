@@ -1,3 +1,5 @@
+import argparse
+import hashlib
 import os
 import pickle
 import re
@@ -548,7 +550,7 @@ def all_buff_marc_files():
         template_obj_path = '../data/Models/tshirt_4424verts.obj'
         smplx_model_path = 'models/smplx/SMPLX_NEUTRAL.npz'  # TODO Unused
         smpl_model_path = '../data/smpl/smpl_neutral.pkl'
-        autoencoder_state_dict_path = '../data/offset_vae_test.torch'
+        autoencoder_state_dict_path = '../data/offset_vae_test.pth'
 
         expose_folder = os.path.join(buff_base, f'{seq}_expose')
 
@@ -695,7 +697,7 @@ def one_dan_file():
         'smpl_model_path': '../data/smpl/smpl_neutral.pkl',
         'script_meaning': 'dan_one_file',
         'log_path': '../output/dan_seq',
-        'autoencoder_state_dict_path': '../data/offset_vae_test.torch',
+        'autoencoder_state_dict_path': '../data/offset_vae_test.pth',
 
         'smpl_params': expose_converted_data,
         'pifu_result_normals': normals,
@@ -705,11 +707,103 @@ def one_dan_file():
     yield d
 
 
-def main():
+def old_main():
     info_dicts = all_buff_marc_files
     info_dicts = one_dan_file
 
     run_sequence(info_dicts)
+
+
+def main():
+    descr = 'Reconstruct meshes from a sequence of frames. ' \
+            'A sequence with name <NAME> needs the following folders: ' \
+            '<NAME_expose> ' \
+            '<NAME_parsing> ' \
+            '<NAME_pifu> ' \
+            '<NAME_smpl> '
+
+    parser = argparse.ArgumentParser(
+        description=descr,
+    )
+    parser.add_argument(
+        '--dir',
+        type=str,
+        help='Directory where the sequence folders are',
+        required=True,
+    )
+    parser.add_argument(
+        '--tshirt_template',
+        type=str,
+        default='../data/tshirt_4424verts.obj',
+        help='Path of the template',
+    )
+    parser.add_argument(
+        '--smpl_path',
+        type=str,
+        default='../data/smpl/smpl_neutral.pkl',
+        help='Path to SMPL model',
+    )
+    parser.add_argument(
+        '--vae_state_dict',
+        type=str,
+        default='../data/offset_vae_test.pth',
+        help='Path to the weights of the VAE',
+    )
+    parser.add_argument(
+        '--output_path',
+        type=str,
+        default='../output',
+        help='Where to output results and logs'
+    )
+    res = parser.parse_args()
+
+    base_directory = res.dir
+    tshirt_template_path = res.tshirt_template
+    smpl_path = res.smpl_path
+    vae_state_dict_path = res.vae_state_dict
+    output_path = res.output_path
+
+    tshirt_exists = os.path.exists(tshirt_template_path)
+    print(f'Tshirt template: {tshirt_template_path}. Exists? {tshirt_exists}')
+
+    smpl_exists = os.path.exists(smpl_path)
+    if not smpl_exists:
+        raise RuntimeError(f'SMPL model not found in {smpl_path}')
+    else:
+        with open(smpl_path, 'rb') as file:
+            read_hash = hashlib.md5(file.read()).hexdigest()
+        if not read_hash == 'b3d3e3e236add66eb09bfc48a5ae87c4':
+            # TODO Should this be an error or a warning?
+            raise RuntimeError('The md5 of the loaded SMPL is not the same as the one we used!')
+
+    vae_exists = os.path.exists(vae_state_dict_path)
+    if not vae_exists:
+        raise RuntimeError(f'VAE weights not found in {vae_state_dict_path}')
+
+    os.makedirs(output_path, exist_ok=True)
+
+    for seq_name in os.listdir(base_directory):
+        for sub_type in ['smpl', 'expose', 'pifu', 'parsing']:
+            full_subdir_path = os.path.join(base_directory, seq_name, f'{seq_name}_{sub_type}')
+            exists = os.path.exists(full_subdir_path)
+            if not exists:
+                error_msg = (
+                    f' Folder "{sub_type}" does not exist for sequence "{seq_name}". '
+                    f'Full path tested: "{full_subdir_path}".'
+                )
+                raise RuntimeError(error_msg)
+    else:
+        print('All sequences are correct')
+
+    data = {
+        'base_directory': base_directory,
+        'tshirt_template_path': tshirt_template_path,
+        'smpl_path': smpl_path,
+        'vae_state_dict_path': vae_state_dict_path,
+        'output_path': output_path,
+    }
+
+    return data
 
 
 if __name__ == '__main__':
