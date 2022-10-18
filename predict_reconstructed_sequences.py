@@ -5,19 +5,17 @@ import pickle as pkl
 import igl
 import numpy as np
 import torch
-import trimesh
+import tqdm
 from scipy.spatial.transform import Rotation as R
-from tqdm import tqdm
-
 from encoder.encode_reconstructed_poses import batched_slerp
 from regressor import Regressor
-from tools.animation_storage_tools import save_pc2
-from tools.colision_tools import push_vertices
+from tools.animation_storage_tools import save_pc2, save_kaolin_mesh
+from tools.collision_tools import push_vertices
 from tools.posing_tools import load_poser
 
 
 def predict_reconstructed_sequence(
-        dir,
+        directory,
         sequence,
         regressor,
         mean_pose,
@@ -29,18 +27,30 @@ def predict_reconstructed_sequence(
         epoch
 ):
     regex_pkl = "*_enc.pkl"
-    regex_pkl_filenames = glob.glob(os.path.join(dir, sequence, regex_pkl))
+    regex_pkl_filenames = glob.glob(os.path.join(directory, sequence, regex_pkl))
     regex_pkl_filenames.sort()
-    body_poses_pca_features = [torch.load(x) for x in regex_pkl_filenames]
 
     regex_bp = ('[0-9]' * 4) + ".pkl"
-    regex_bp_filenames = glob.glob(os.path.join(dir, sequence, regex_bp))
+    regex_bp_filenames = glob.glob(os.path.join(directory, sequence, regex_bp))
     regex_bp_filenames.sort()
-    smpl_models = [pkl.load(open(x, "rb")) for x in regex_bp_filenames]
-    global_orient = [x["global_orient"].cpu() for x in smpl_models]
-    body_poses_as_matrices = [x["body_pose"].detach().cpu() for x in smpl_models]
 
-    for i in range(1, len(body_poses_as_matrices)):
+    if not (regex_bp_filenames and regex_pkl_filenames):
+        raise RuntimeError('I need files to process!')
+
+    body_poses_pca_features = [torch.load(x) for x in regex_pkl_filenames]
+    smpl_data_all = [pkl.load(open(x, "rb")) for x in regex_bp_filenames]
+
+    global_orient_all = []
+    body_poses_as_matrices_all = []
+    for x in smpl_data_all:
+        global_orient_all.append(
+            x["global_orient"].cpu()
+        )
+        body_poses_as_matrices_all.append(
+            x["body_pose"].detach().cpu()
+        )
+
+    for i in range(1, len(body_poses_as_matrices_all)):
         end_rotation_mat = body_poses_as_matrices[i][0]
         start_rotation_mat = body_poses_as_matrices[i - 1][0]
 
@@ -50,14 +60,21 @@ def predict_reconstructed_sequence(
         test = batched_slerp(end_rotation_vec, start_rotation_vec)
         slerped_mat = R.from_rotvec(test).as_matrix()
 
-        body_poses_as_matrices[i] = torch.from_numpy(slerped_mat).float().unsqueeze(0)
+        body_poses_as_matrices_all[i] = torch.from_numpy(slerped_mat).float().unsqueeze(0)
 
     poser, lbs_weights, smpl_layer = load_poser()
+
+    # Read with IGL so that the subdivision later doesn't conflict
+    template_verts, template_faces = igl.read_triangle_mesh("data/mean_shirt.obj")
 
     offsets_acc = None
     vertices = []
     vertices_body = []
-    for pose, body_pose, orient in tqdm(zip(body_poses_pca_features, body_poses_as_matrices, global_orient)):
+    iterator = tqdm.tqdm(
+        iterable=zip(body_poses_pca_features, body_poses_as_matrices_all, global_orient_all),
+        total=len(body_poses_pca_features),
+    )
+    for pose, body_pose, orient in iterator:
         pose = pose.float().cuda()
         pose = (pose - mean_pose) / sd_pose
 
@@ -72,8 +89,8 @@ def predict_reconstructed_sequence(
 
         kwargs = {
             'betas': betas.squeeze().unsqueeze(0),
-            'body_pose': body_pose.squeeze().unsqueeze(0),
-            'global_orient': orient.squeeze().unsqueeze(0).unsqueeze(0)
+            'body_pose': body_pose,
+            'global_orient': orient,
         }
 
         with torch.no_grad():
@@ -101,22 +118,29 @@ def predict_reconstructed_sequence(
         vertices.append(pushed)
         vertices_body.append(body_vertices)
 
-    v, f = igl.read_triangle_mesh("data/mean_shirt.obj")
-    meshes = [igl.loop(verts, f, number_of_subdivs=1) for verts in vertices]
+    meshes = [
+        igl.loop(verts, template_faces, number_of_subdivs=1)
+        for verts in vertices
+    ]
 
-    template = trimesh.Trimesh(meshes[0][0], meshes[0][1], process=False)
-    template.export(os.path.join(dir, sequence + "_" + str(epoch) + ".obj"))
+    # Save one mesh, the animation can be loaded with the PC2 file
+    first_mesh = meshes[0]
+    save_kaolin_mesh(
+        path=os.path.join(directory, f"{sequence}_{epoch}.obj"),
+        verts=first_mesh[0],
+        faces=first_mesh[1],
+    )
 
     mesh_vertices = [mesh[0] for mesh in meshes]
     mesh_vertices = np.array(mesh_vertices)
 
     vertices_body = np.array(vertices_body)
 
-    save_pc2(os.path.join(dir, sequence + "_" + str(epoch) + ".pc2"), mesh_vertices)
-    save_pc2(os.path.join(dir, sequence + "_" + str(epoch) + "_body.pc2"), vertices_body)
+    save_pc2(os.path.join(directory, f"{sequence}_{epoch}.pc2"), mesh_vertices)
+    save_pc2(os.path.join(directory, f"{sequence}_{epoch}_body.pc2"), vertices_body)
 
 
-def predict_reconstructed_sequences(dir, sequences):
+def predict_reconstructed_sequences(directory, sequences):
     params = pkl.load(open("data/params_enc.pkl", "rb"))
 
     mean_shirt = torch.from_numpy(params["mean_shirt"]).cuda()
@@ -129,12 +153,13 @@ def predict_reconstructed_sequences(dir, sequences):
 
     regressor = Regressor(in_channels=10, out_channels=4424)
     chp = torch.load("data/checkpoints/regressor-epoch-97-losses-0.075.pth")
+    epoch = 97  # Same as the loaded weights
     regressor.load_state_dict(chp)
     regressor = regressor.cuda()
 
     for sequence in sequences:
         predict_reconstructed_sequence(
-            dir,
+            directory,
             sequence,
             regressor,
             mean_pose,
@@ -143,17 +168,17 @@ def predict_reconstructed_sequences(dir, sequences):
             max_offset,
             min_offset,
             betas,
-            97)
+            epoch)
 
 
 def main_example():
-    dir = "data/train_sequence/poses/"
+    directory = "data/train_sequence/poses/"
     sequences = ["dan-005"]
-    predict_reconstructed_sequences(dir, sequences)
+    predict_reconstructed_sequences(directory, sequences)
 
-    dir = "data/validation_sequence/poses/"
+    directory = "data/validation_sequence/poses/"
     sequences = ["dan-013"]
-    predict_reconstructed_sequences(dir, sequences)
+    predict_reconstructed_sequences(directory, sequences)
 
 
 if __name__ == "__main__":

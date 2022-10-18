@@ -3,9 +3,9 @@ import os
 import pickle as pkl
 
 
-def encode_sequence(dir, sequence):
+def process_sequence(directory, sequence):
     regex_pkl = ('[0-9]' * 4) + ".pkl"
-    regex_pkl_filenames = glob.glob(os.path.join(dir, sequence, regex_pkl))
+    regex_pkl_filenames = glob.glob(os.path.join(directory, sequence, regex_pkl))
     regex_pkl_filenames.sort()
 
     for filename in regex_pkl_filenames:
@@ -17,19 +17,19 @@ def encode_sequence(dir, sequence):
             pkl.dump(smpl_body_pose, f)
 
 
-def encode_sequences(dir, sequences):
+def process_sequences(directory, sequences):
     for sequence in sequences:
-        encode_sequence(dir, sequence)
+        process_sequence(directory, sequence)
 
 
 def main_example():
-    dir = "../data/train_sequence/poses/"
+    directory = "../data/train_sequence/poses/"
     sequences = ["dan-005"]
-    encode_sequences(dir, sequences)
+    process_sequences(directory, sequences)
 
-    dir = "../data/validation_sequence/poses/"
+    directory = "../data/validation_sequence/poses/"
     sequences = ["dan-013"]
-    encode_sequences(dir, sequences)
+    process_sequences(directory, sequences)
 
 
 if __name__ == "__main__":
