@@ -1,7 +1,5 @@
 wheel
 numpy
-scikit-image
-tensorflow
 tensorboard
 smplx[all]
 torch

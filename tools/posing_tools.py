@@ -4,6 +4,8 @@ import kaolin.io.obj as kaobj
 import smplx
 import smplx.lbs as smplx_lbs
 import torch
+import torch.nn as nn
+from smplx.lbs import batch_rodrigues
 
 
 def custom_lbs(vertices, joint_transforms, skinning_weights, inverse=False):
@@ -104,6 +106,87 @@ class Poser:
         )
 
         return lbs_result
+
+
+class TshirtPoser(nn.Module):
+    def __init__(
+            self,
+            smpl_model: typing.Union[smplx.SMPLXLayer, smplx.SMPLLayer],
+            lbs_weights: torch.Tensor,
+            betas: torch.Tensor = None,
+            body_pose: torch.Tensor = None,
+            global_orient: torch.Tensor = None,
+            transl: torch.Tensor = None,
+            reverse: bool = False,
+            device=None,
+    ):
+        super().__init__()
+        if device is None:
+            device = torch.device('cpu')
+        self.device = device
+
+        self.smplx_model = smpl_model.to(device)
+        self.lbs_weights = lbs_weights.clone().to(device)
+
+        self.poser = Poser(smpl_model, device)
+
+        if body_pose is None:
+            self.body_pose = torch.eye(3, device=device).expand(1, smpl_model.NUM_BODY_JOINTS, 3, 3).clone()
+        else:
+            if body_pose.dim() < 4:
+                body_pose = batch_rodrigues(body_pose[0])[None]
+            self.body_pose = body_pose.clone().to(device)
+
+        if global_orient is None:
+            self.global_orient = torch.eye(3, device=device).view(1, 1, 3, 3)
+        else:
+            self.global_orient = global_orient.clone().to(device)
+
+        if betas is None:
+            self.betas = torch.zeros(1, 10, device=device)
+        else:
+            self.betas = betas.clone().to(device)
+
+        if transl is None:
+            self.transl = torch.zeros(1, 3, device=device)
+        else:
+            self.transl = transl.clone().to(device)
+
+        self.reverse = reverse
+
+    def forward(
+            self,
+            vertices,
+            body_pose: torch.Tensor = None,
+            betas: torch.Tensor = None,
+            global_orient: torch.Tensor = None,
+            transl: torch.Tensor = None,
+            reverse: bool = None,
+    ):
+        smplx_kwargs = {
+            'body_pose': body_pose if body_pose is not None else self.body_pose,
+            'global_orient': global_orient if global_orient is not None else self.global_orient,
+        }
+        betas = betas if betas is not None else self.betas
+
+        _reverse = reverse if reverse is not None else self.reverse
+        posed = self.poser.pose(vertices, betas, smplx_kwargs, self.lbs_weights, _reverse)
+
+        t = transl if transl is not None else self.transl
+
+        posed = posed + t
+
+        return posed
+
+
+class TshirtOffsetter(nn.Module):
+    def __init__(self, vertices: torch.FloatTensor):
+        super().__init__()
+        self.vertices = vertices
+
+    def forward(self, offset):
+        n, flat = offset.shape
+        return self.vertices + offset.view(n, -1, 3)
 
 
 def load_poser():
