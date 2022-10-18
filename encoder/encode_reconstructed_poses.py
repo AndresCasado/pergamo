@@ -3,8 +3,10 @@ import os
 import pickle as pkl
 
 import numpy as np
-import tensorflow as tf
+import torch
 from scipy.spatial.transform import Rotation as R
+
+from encoder.pose_encoder_10D_torch import PoseEncoder10D
 
 
 def batched_slerp(batched_origins, batched_ends, t=0.5):
@@ -49,15 +51,15 @@ def encode_sequence(dir, sequence, pose_encoder):
             )
 
         bp_angle_smooth_reshaped = body_poses_as_angleaxis_smooth.reshape(1, 23 * 3)
-        body_poses_encoded = pose_encoder.predict(bp_angle_smooth_reshaped)
+        body_poses_encoded = pose_encoder.forward(bp_angle_smooth_reshaped)
         output_filename = filename.replace("_bp.pkl", "_enc.pkl")
-        with open(output_filename, 'wb') as f:
-            pkl.dump(body_poses_encoded, f)
+        torch.save(body_poses_encoded, output_filename)
 
 
 def encode_sequences(dir, sequences):
-    pose_encoder_path = "pose_encoder_10D"
-    pose_encoder = tf.keras.models.load_model(pose_encoder_path, compile=False)
+    pose_encoder_path = "../pose_encoder_10D_converted.pth"
+    pose_encoder = PoseEncoder10D()
+    pose_encoder.load_state_dict(torch.load(pose_encoder_path))
 
     for sequence in sequences:
         encode_sequence(dir, sequence, pose_encoder)

@@ -26,10 +26,10 @@ def predict_reconstructed_sequence(
         betas,
         epoch
 ):
-    regex_pkl = "*_enc.pkl"
+    regex_pkl = "*_enc.pth"
     regex_pkl_filenames = glob.glob(os.path.join(dir, sequence, regex_pkl))
     regex_pkl_filenames.sort()
-    body_poses_pca_features = [pkl.load(open(x, "rb")) for x in regex_pkl_filenames]
+    body_poses_pca_features = [torch.load(x) for x in regex_pkl_filenames]
 
     regex_bp = ('[0-9]' * 4) + ".pkl"
     regex_bp_filenames = glob.glob(os.path.join(dir, sequence, regex_bp))
@@ -47,7 +47,7 @@ def predict_reconstructed_sequence(
     vertices = []
     vertices_body = []
     for pose, body_pose, orient in tqdm(zip(body_poses_pca_features, body_poses_as_matrices, global_orient)):
-        pose = torch.tensor(pose).float().cuda()
+        pose = pose.float().cuda()
         pose = (pose - mean_pose) / sd_pose
 
         offsets_pred = regressor(pose.unsqueeze(0))
