@@ -6,7 +6,8 @@ import igl
 import numpy as np
 import torch
 import tqdm
-
+from scipy.spatial.transform import Rotation as R
+from encoder.encode_reconstructed_poses import batched_slerp
 from regressor import Regressor
 from tools.animation_storage_tools import save_pc2, save_kaolin_mesh
 from tools.collision_tools import push_vertices
@@ -25,7 +26,7 @@ def predict_reconstructed_sequence(
         betas,
         epoch
 ):
-    regex_pkl = "*_enc.pth"
+    regex_pkl = "*_enc.pkl"
     regex_pkl_filenames = glob.glob(os.path.join(directory, sequence, regex_pkl))
     regex_pkl_filenames.sort()
 
@@ -49,9 +50,17 @@ def predict_reconstructed_sequence(
             x["body_pose"].detach().cpu()
         )
 
-    # TODO Interpolation
     for i in range(1, len(body_poses_as_matrices_all)):
-        body_poses_as_matrices_all[i] = body_poses_as_matrices_all[i] * 0.5 + body_poses_as_matrices_all[i - 1] * 0.5
+        end_rotation_mat = body_poses_as_matrices[i][0]
+        start_rotation_mat = body_poses_as_matrices[i - 1][0]
+
+        end_rotation_vec = R.from_matrix(end_rotation_mat).as_rotvec()
+        start_rotation_vec = R.from_matrix(start_rotation_mat).as_rotvec()
+
+        test = batched_slerp(end_rotation_vec, start_rotation_vec)
+        slerped_mat = R.from_rotvec(test).as_matrix()
+
+        body_poses_as_matrices_all[i] = torch.from_numpy(slerped_mat).float().unsqueeze(0)
 
     poser, lbs_weights, smpl_layer = load_poser()
 
