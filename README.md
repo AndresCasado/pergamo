@@ -25,7 +25,7 @@ by installing the IGL bindings from source.
 
 The general steps are as follows:
 
-1. Install PyTorch according to your system
+1. Install PyTorch according to your system ( https://pytorch.org/get-started/locally/ )
 2. See the `requirements.txt` file to check the needed packages
     - This is usually done with `pip install -r requirements.txt`, but Anaconda may have a different way of doing things
 3. Install IGL bindings ( https://github.com/libigl/libigl-python-bindings )
@@ -34,23 +34,32 @@ The general steps are as follows:
 PERGAMO needs SMPL. You can download it from [SMPL](https://smpl.is.tue.mpg.de/). Rename the file from
 `basicmodel_neutral_lbs_10_207_0_v1.1.0.pkl` to `smpl_neutral.pkl` and save it under `data/smpl/`.
 
-## Datasets
-
-You can download a dataset
-from [OneDrive](https://urjc-my.sharepoint.com/:f:/g/personal/andres_casado_urjc_es/EuNAwoSGWD5HtT6AsgL8vJcByupY0Tsx4n95vVlh0CDKsw)
-.
-
-Datasets are made by processing each frame with:
-
-- ExPose (output is SMPL-X, they need to be converted to SMPL too)
-- PifuHD
-- Self-Correction-Human-Parsing
-
 ## Running the project
 
 To run the reconstruction, please check out `run_recons.sh`.
 
 To run the regression, there are 2 sets of 3 scripts. Please check out `run_regression.sh` to see how it works.
+
+## Datasets
+
+### For reconstruction
+
+You can download a dataset from
+[OneDrive](https://urjc-my.sharepoint.com/:f:/g/personal/andres_casado_urjc_es/EuNAwoSGWD5HtT6AsgL8vJcByupY0Tsx4n95vVlh0CDKsw)
+.
+
+Datasets for the reconstruction script are made by processing each frame with:
+
+- ExPose (output is SMPL-X, they need to be converted to SMPL too)
+- PifuHD
+- Self-Correction-Human-Parsing
+
+### For regression
+
+You can use AMASS sequences by placing the `.npz` files under `data/test_sequence`.
+
+Alternatively, you can run the regression on sequences of SMPL poses saved as `.pkl` files. Check the set
+of `reconstructed` scripts.
 
 ## Citation
 

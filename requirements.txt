@@ -2,6 +2,4 @@ wheel
 numpy
 tensorboard
 smplx[all]
-torch
-torchvision
 tqdm
