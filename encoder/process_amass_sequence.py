@@ -67,7 +67,11 @@ def process_sequences(directory, motion_paths):
 
 def main_example():
     directory = "../data/test_sequence/"
-    motion_paths = ["Subject_6_F_7_poses.npz"]
+    motion_paths = [
+        file
+        for file in os.listdir(directory)
+        if file.endswith('.npz')
+    ]
     process_sequences(directory, motion_paths)
 
 

@@ -106,7 +106,7 @@ def predict_amass_sequence(
 
     meshes = [
         igl.loop(verts, template_faces, number_of_subdivs=1)
-        for verts in vertices
+        for verts in vertices[:400]
     ]
 
     # Save one mesh, the animation can be loaded with the PC2 file
@@ -160,7 +160,11 @@ def predict_amass_sequences(directory, sequences):
 
 def main_example():
     directory = "data/test_sequence/"
-    sequences = ["Subject_6_F_7_poses"]
+    sequences = [
+        folder
+        for folder in os.listdir(directory)
+        if os.path.isdir(os.path.join(directory, folder))
+    ]
     predict_amass_sequences(directory, sequences)
 
 

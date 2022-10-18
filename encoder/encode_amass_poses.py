@@ -34,7 +34,11 @@ def encode_sequences(directory, sequences):
 
 def main_example():
     directory = "../data/test_sequence/"
-    sequences = ["Subject_6_F_7_poses"]
+    sequences = [
+        folder
+        for folder in os.listdir(directory)
+        if os.path.isdir(os.path.join(directory, folder))
+    ]
     encode_sequences(directory, sequences)
 
 
