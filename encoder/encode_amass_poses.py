@@ -24,7 +24,7 @@ def encode_sequence(directory, sequence, pose_encoder):
 
 
 def encode_sequences(directory, sequences):
-    pose_encoder_path = "../pose_encoder_10D_converted.pth"
+    pose_encoder_path = "../data/weights/pose_encoder_10D_converted.pth"
     pose_encoder = PoseEncoder10D()
     pose_encoder.load_state_dict(torch.load(pose_encoder_path))
 

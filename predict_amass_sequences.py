@@ -138,7 +138,7 @@ def predict_amass_sequences(directory, sequences):
     betas = torch.from_numpy(pkl.load(open("data/mean_betas.pkl", "rb"))).unsqueeze(0)
 
     regressor = Regressor(in_channels=10, out_channels=4424)
-    chp = torch.load("data/checkpoints/regressor-epoch-97-losses-0.075.pth")
+    chp = torch.load("data/weights/regressor-epoch-97-losses-0.075.pth")
     epoch = 97  # Same as the loaded weights
     regressor.load_state_dict(chp)
     regressor = regressor.cuda()

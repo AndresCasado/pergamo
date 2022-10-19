@@ -581,7 +581,7 @@ def main():
     parser.add_argument(
         '--vae_state_dict',
         type=str,
-        default='./data/offset_vae_test.pth',
+        default='./data/weights/offset_vae_test.pth',
         help='Path to the weights of the VAE',
     )
     parser.add_argument(

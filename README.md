@@ -20,6 +20,8 @@
 
 ## Install instructions
 
+### Python dependencies
+
 IGL only supports and recommends the use of Anaconda. However, the environment can be set up using only `pip`
 by installing the IGL bindings from source.
 
@@ -31,14 +33,27 @@ The general steps are as follows:
 3. Install IGL bindings ( https://github.com/libigl/libigl-python-bindings )
 4. Install Kaolin ( https://kaolin.readthedocs.io/en/latest/notes/installation.html )
 
-PERGAMO needs SMPL. You can download it from [SMPL](https://smpl.is.tue.mpg.de/). Rename the file from
-`basicmodel_neutral_lbs_10_207_0_v1.1.0.pkl` to `smpl_neutral.pkl` and save it under `data/smpl/`.
+### Models
+
+- You can download the weights from
+  [OneDrive](https://urjc-my.sharepoint.com/:f:/g/personal/andres_casado_urjc_es/EuNAwoSGWD5HtT6AsgL8vJcByupY0Tsx4n95vVlh0CDKsw)
+  . Place the `weights` folder from OneDrive into the `data` folder of this repository.
+- PERGAMO needs SMPL. You can download it from [SMPL](https://smpl.is.tue.mpg.de/). Rename the file from
+  `basicmodel_neutral_lbs_10_207_0_v1.1.0.pkl` to `smpl_neutral.pkl` and save it under `data/smpl/`.
 
 ## Running the project
 
 To run the reconstruction, please check out `run_recons.sh`.
 
 To run the regression, there are 2 sets of 3 scripts. Please check out `run_regression.sh` to see how it works.
+
+### Visualizing regression results
+
+The output is generated under `data` (`test_sequence` for AMASS scripts, `train/validation_sequence` for reconstructed
+scripts).
+
+To visualize using Blender, load the `.obj` file with the option `Geometry > Keep Vert Order`. Then, add a `Mesh Cache`
+modifier to the loaded mesh. Change the type to `PC2` and then load the `.pc2` file adjacent to the `.obj`.
 
 ## Datasets
 
