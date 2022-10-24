@@ -1,6 +1,5 @@
 import glob
 import os
-import pickle as pkl
 
 import numpy as np
 import torch
@@ -13,7 +12,7 @@ def predict_sequence(regressor, sequence, mean_pose, sd_pose, mean_shirt, max_of
     regex_pkl = "*_enc.pkl"
     regex_pkl_filenames = glob.glob(os.path.join(sequence, regex_pkl))
     regex_pkl_filenames.sort()
-    body_poses_pca_features = [pkl.load(open(x, "rb")) for x in regex_pkl_filenames]
+    body_poses_pca_features = [torch.load(x) for x in regex_pkl_filenames]
 
     vertices = []
     for pose in tqdm(body_poses_pca_features):

@@ -44,8 +44,7 @@ class Dataset(tvd.DatasetFolder):
         vertices = np.array(mesh.vertices)
         vertices = torch.from_numpy(vertices).float()
 
-        pose = pkl.load(open(pose_path, "rb")).squeeze().reshape(HYPER_PARAMETERS["input_size"])
-        pose = torch.from_numpy(pose).float()
+        pose = torch.load(pose_path).squeeze().reshape(HYPER_PARAMETERS["input_size"])
 
         return target, pose, vertices
 
