@@ -301,7 +301,7 @@ def main():
     mean_pose = torch.from_numpy(params["mean_pose"]).cuda()
     sd_pose = torch.from_numpy(params["sd_pose"]).cuda()
 
-    template_fs = kaobj.import_mesh('data/mean_shirt.obj').faces
+    template_fs = kaobj.import_mesh('data/mean_shirt.obj').faces.cuda()
 
     epoch_acc = 0
     for epochs, learning_rate in zip(HYPER_PARAMETERS["epochs"], HYPER_PARAMETERS["learning_rates"]):
