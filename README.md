@@ -57,17 +57,65 @@ modifier to the loaded mesh. Change the type to `PC2` and then load the `.pc2` f
 
 ## Datasets
 
-### For reconstruction
-
 You can download a dataset from
 [OneDrive](https://urjc-my.sharepoint.com/:f:/g/personal/andres_casado_urjc_es/EuNAwoSGWD5HtT6AsgL8vJcByupY0Tsx4n95vVlh0CDKsw)
 .
+
+### Structure
+
+Each data set has the following folder hierarchy:
+
+```
+DataDanXXXXX
+├─ clips (video files)
+| ├─ dan-X01.mp4
+| ├─ dan-X02.mp4
+| ├─ ...
+├─ reconstruction_input
+| ├─ dan-X01
+| | ├─ dan-X01 (video frames)
+| | ├─ dan-X01_expose
+| | ├─ dan-X01_parsing
+| | ├─ dan-X01_pifu
+| | ├─ dan-X01_smpl
+| ├─ dan-X02
+| | ├─ ...
+| ├─ ...
+├─ reconstruction_output (reconstructed garment meshes)
+| ├─ dan-X01
+| ├─ dan-X02
+| ├─ ...
+├─ regressor_training_data
+├─ train_sequences
+| ├─ meshes (reconstructed garment meshes in Tpose)
+| | ├─ dan-X01
+| | ├─ dan-X02
+| | ├─ ...
+| ├─ poses (encoded poses using the SoftSMPL encoding)
+| | ├─ dan-X01
+| | ├─ dan-X02
+| | ├─ ...
+├─ validation_sequences (same structure as train)
+├─ ...
+```
+
+### For reconstruction
 
 Datasets for the reconstruction script are made by processing each frame with:
 
 - ExPose (output is SMPL-X, they need to be converted to SMPL too)
 - PifuHD
 - Self-Correction-Human-Parsing
+
+The necessary files are provided in the reconstruction_input folder. We also provide reconstructed meshes for each
+dataset (reconstruction_input folder) and the same meshes in Tpose space (inside the meshes folder on
+regressor_training_data).
+
+### For training
+
+Our regressors predict wrinkles (vertex displacements with respect to a template mesh) from SMPL poses encoding using
+the SoftSMPL encoding. We provide such encoded poses for the DataDanGrey dataset and also the scripts to generate such
+encoding from arbitrary SMPL paramteres.
 
 ### For regression
 
