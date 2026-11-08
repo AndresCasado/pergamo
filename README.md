@@ -3,8 +3,10 @@
 ![Teaser](readme_assets/teaser.png "Teaser image")
 
 [[Project website](https://mslab.es/projects/PERGAMO)]
-[[Dataset](https://urjc-my.sharepoint.com/:f:/g/personal/andres_casado_urjc_es/EuNAwoSGWD5HtT6AsgL8vJcByupY0Tsx4n95vVlh0CDKsw)]
+[[Dataset](https://urjc-my.sharepoint.com/:f:/r/personal/andres_casado_urjc_es/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fandres%5Fcasado%5Furjc%5Fes%2FDocuments%2FPERGAMO%5Fpublic&share=cgrjQMKEhlg%2DR7U%2DgLIC%5FLyXEgUCkp8DjN8xtn88bLPKqTtlfg)]
 [[Video](https://www.youtube.com/watch?v=giaHHW6R6pk)]
+
+
 
 ## Abstract
 
@@ -36,7 +38,7 @@ The general steps are as follows:
 ### Models
 
 - You can download the weights from
-  [OneDrive](https://urjc-my.sharepoint.com/:f:/g/personal/andres_casado_urjc_es/EuNAwoSGWD5HtT6AsgL8vJcByupY0Tsx4n95vVlh0CDKsw)
+  [OneDrive](https://urjc-my.sharepoint.com/:f:/r/personal/andres_casado_urjc_es/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fandres%5Fcasado%5Furjc%5Fes%2FDocuments%2FPERGAMO%5Fpublic&share=cgrjQMKEhlg%2DR7U%2DgLIC%5FLyXEgUCkp8DjN8xtn88bLPKqTtlfg)
   . Place the `weights` folder from OneDrive into the `data` folder of this repository.
 - PERGAMO needs SMPL. You can download it from [SMPL](https://smpl.is.tue.mpg.de/). Rename the file from
   `basicmodel_neutral_lbs_10_207_0_v1.1.0.pkl` to `smpl_neutral.pkl` and save it under `data/smpl/`.
@@ -58,7 +60,7 @@ modifier to the loaded mesh. Change the type to `PC2` and then load the `.pc2` f
 ## Datasets
 
 You can download a dataset from
-[OneDrive](https://urjc-my.sharepoint.com/:f:/g/personal/andres_casado_urjc_es/EuNAwoSGWD5HtT6AsgL8vJcByupY0Tsx4n95vVlh0CDKsw)
+[OneDrive](https://urjc-my.sharepoint.com/:f:/r/personal/andres_casado_urjc_es/_layouts/15/onedrive.aspx?id=%2Fpersonal%2Fandres%5Fcasado%5Furjc%5Fes%2FDocuments%2FPERGAMO%5Fpublic&share=cgrjQMKEhlg%2DR7U%2DgLIC%5FLyXEgUCkp8DjN8xtn88bLPKqTtlfg)
 .
 
 ### Structure
